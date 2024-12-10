@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Solana Wallet Tracker</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    #consoleLog {
+      width: 100%;
+      height: 200px;
+      background-color: #1a1a1a;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 14px;
+      overflow-y: auto;
+      padding: 10px;
+      border: 1px solid #555;
+      margin-top: 10px;
+    }
+
+    #consoleLog span {
+      display: block;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+    <button id="openDevTools" class="absolute top-4 right-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-2 rounded-lg transition duration-200">🛠️</button>
+  <div class="container mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6 text-center">🟢 Solana Wallet Tracker</h1>
+
+    <!-- Форма вводу параметрів -->
+    <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+      <div class="mb-4">
+        <label for="wsToken" class="block text-sm font-medium text-white">WS Token</label>
+        <input type="text" id="wsToken" placeholder="Введіть ваш WS Token" class="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+      </div>
+
+      <div class="mb-4">
+        <label for="solAmount" class="block text-sm font-medium text-white">SOL Amount</label>
+        <input type="number" id="solAmount" value="10" class="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+      </div>
+
+      <div class="mb-4">
+        <label for="telegramBotToken" class="block text-sm font-medium text-white">Telegram Bot Token</label>
+        <input type="text" id="telegramBotToken" placeholder="Введіть ваш Telegram Bot Token" class="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+      </div>
+
+      <div class="mb-4">
+        <label for="telegramChatId" class="block text-sm font-medium text-white">Telegram Chat ID</label>
+        <input type="text" id="telegramChatId" placeholder="Введіть ваш Telegram Chat ID" class="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+      </div>
+
+      <div class="flex justify-between">
+        <button id="startButton" class="w-full mr-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+          🟢 Запуск
+        </button>
+
+        <button id="stopButton" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+          🛑 Зупинити
+        </button>
+      </div>
+    </div>
+
+    <!-- Лог -->
+    <h2 class="text-2xl font-bold mt-8">📜 Лог</h2>
+    <div id="consoleLog" class="bg-gray-900 rounded-lg border border-gray-700 shadow-lg mt-2"></div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

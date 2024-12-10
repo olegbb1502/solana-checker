@@ -3,15 +3,42 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "bin": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:win": "electron-builder --win portable"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@solana/web3.js": "^1.95.5",
+    "axios": "^1.7.9",
     "dotenv": "^16.4.6",
     "web3": "^4.16.0"
+  },
+  "build": {
+    "appId": "com.example.solanatracker",
+    "productName": "Solana Wallet Tracker",
+    "files": [
+      "**/*"
+    ],
+    "extraFiles": [
+      "app.js",
+      "renderer.js",
+      "icon.ico"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "icon.ico",
+      "target": [
+        "portable"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
   }
 }
