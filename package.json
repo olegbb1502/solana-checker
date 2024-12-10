@@ -6,7 +6,8 @@
   "bin": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:win": "electron-builder --win portable"
+    "build:win": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac"
   },
   "keywords": [],
   "author": "",
@@ -36,6 +37,11 @@
       "target": [
         "portable"
       ]
+    },
+    "mac": {
+      "icon": "icon.icns",
+      "target": ["dmg", "zip"],
+      "sign": false
     }
   },
   "devDependencies": {

@@ -7,13 +7,10 @@ const { SOL_AMOUNT = 10, WS_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = proc
 
 const sendTelegramMessage = async (message, log) => {
   try {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
-
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
     const response = await axios.post(url, {
-      chat_id: chatId,
+      chat_id: TELEGRAM_CHAT_ID,
       text: message
     });
 
@@ -58,7 +55,7 @@ const getBlockWithRetry = async (connection, slot, log, maxRetries = 5, delay = 
 
 const main = async (log, stopCallback) => {
   try {
-    const httpUrl = `https://rpc-mainnet.solanatracker.io/?api_key=${process.env.WS_TOKEN}`;
+    const httpUrl = `https://rpc-mainnet.solanatracker.io/?api_key=${WS_TOKEN}`;
     const connectionHttp = new Connection(httpUrl, 'finalized');
 
     log('📡 Підключення до Solana через HTTP RPC...');
@@ -80,7 +77,7 @@ const main = async (log, stopCallback) => {
         log(`🔍 Кількість транзакцій у блоці: ${block.transactions.length}`);
 
         const systemProgramId = '11111111111111111111111111111111';
-        const minAmountLamports = BigInt(process.env.SOL_AMOUNT * 1e9); 
+        const minAmountLamports = BigInt(SOL_AMOUNT * 1e9); 
 
         const highValueTransactions = await Promise.all(
           block.transactions.map(async (tx) => {
@@ -110,7 +107,6 @@ const main = async (log, stopCallback) => {
                     const receiverAddress = accountKeys[receiverIndex].toString();
                     log(`💸 Отримувач: ${receiverAddress}, Лампорти: ${lamports} (${solAmount} SOL)`);
 
-                    // Отримати баланс перед транзакцією
                     const preBalance = await connectionHttp.getBalance(receiverAddress, 'processed');
                     log(`💰 Баланс до транзакції: ${preBalance / 1e9} SOL для отримувача: ${receiverAddress}`);
 
@@ -137,17 +133,17 @@ const main = async (log, stopCallback) => {
 
         const validTransactions = highValueTransactions.filter(tx => tx !== null);
 
-        log(`📋 Кількість транзакцій із трансфером ${process.env.SOL_AMOUNT}+ SOL: ${validTransactions.length}`);
+        log(`📋 Кількість транзакцій із трансфером ${SOL_AMOUNT}+ SOL: ${validTransactions.length}`);
 
         validTransactions.forEach((tx, index) => {
-          log(`🔗 Транзакція з трансфером ${process.env.SOL_AMOUNT}+ SOL ${index + 1}: Підпис: ${tx.signature}, Отримувач: ${tx.receiver}, Сума: ${tx.solAmount} SOL`);
+          log(`🔗 Транзакція з трансфером ${SOL_AMOUNT}+ SOL ${index + 1}: Підпис: ${tx.signature}, Отримувач: ${tx.receiver}, Сума: ${tx.solAmount} SOL`);
         });
 
       } catch (error) {
         log(`❌ Помилка при обробці слота ${lastSlot}: ${error.message}`);
       }
 
-      lastSlot += 1; // Збільшуємо слот вручну
+      lastSlot += 1;
       log(`📦 Слот збільшено до: ${lastSlot}`);
     }
   } catch (error) {

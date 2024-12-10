@@ -1,9 +1,9 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { main } = require('./app'); // Імпортуємо функцію main з app.js
+const { main } = require('./app.js');
 
 let mainWindow;
-let stopProcess = false; // Флаг для зупинки процесу
+let stopProcess = false;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
