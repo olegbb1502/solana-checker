@@ -11,7 +11,8 @@ const sendTelegramMessage = async (message, log) => {
 
     const response = await axios.post(url, {
       chat_id: TELEGRAM_CHAT_ID,
-      text: message
+      text: message,
+      parse_mode: 'Markdown'
     });
 
     console.log('Повідомлення надіслано в Telegram:', response.data);
@@ -77,7 +78,6 @@ const main = async (log, stopCallback) => {
         log(`🔍 Кількість транзакцій у блоці: ${block.transactions.length}`);
 
         const systemProgramId = '11111111111111111111111111111111';
-        const minAmountLamports = BigInt(SOL_AMOUNT * 1e9); 
 
         const highValueTransactions = await Promise.all(
           block.transactions.map(async (tx) => {
@@ -97,31 +97,31 @@ const main = async (log, stopCallback) => {
               const programId = accountKeys[instruction.programIdIndex].toString();
               const dataBuffer = Buffer.from(instruction.data, 'base64');
 
-              if (programId === systemProgramId && dataBuffer[0] === 2) {
+              if (programId === systemProgramId && dataBuffer[0] === 220) {
                 if (dataBuffer.length >= 9) {
-                  const lamports = dataBuffer.readBigUInt64LE(1);
-                  const solAmount = Number(lamports) / 1e9;
-
-                  if (lamports >= minAmountLamports) {
-                    const receiverIndex = instruction.accounts[1]; 
-                    const receiverAddress = accountKeys[receiverIndex].toString();
-                    log(`💸 Отримувач: ${receiverAddress}, Лампорти: ${lamports} (${solAmount} SOL)`);
-
-                    const preBalance = await connectionHttp.getBalance(receiverAddress, 'processed');
-                    log(`💰 Баланс до транзакції: ${preBalance / 1e9} SOL для отримувача: ${receiverAddress}`);
-
-                    if (preBalance === 0) {
-                      const message = `💰 Новий гаманець виявлено: ${receiverAddress} отримав ${solAmount} SOL`;
-                      log(message);
-                      await sendTelegramMessage(message);
-                    }
-
+                  const preBalances = tx.meta.preBalances;
+                  const postBalances = tx.meta.postBalances;
+                  const balanceChanges = preBalances.map((preBalance, index) => {
+                    const postBalance = postBalances[index];
+                    const change = postBalance - preBalance;
                     return {
-                      signature: tx.transaction.signatures[0],
-                      receiver: receiverAddress,
-                      solAmount
+                      account: tx.transaction.message.accountKeys[index] || `Account${index + 1}`,
+                      preBalance: preBalance / 1e9,
+                      postBalance: postBalance / 1e9,
+                      change: change / 1e9
                     };
+                  });
+                  const receivers = balanceChanges.filter(change => change.change > 0);
+                  if (receivers[0].preBalance === 0 && receivers[0].postBalance >= SOL_AMOUNT) {
+                    const message = `💰 Новий гаманець виявлено: \`${receivers[0].account.toString()}\` отримав ${receivers[0].postBalance} SOL`;
+                    log(message);
+                    await sendTelegramMessage(message);
                   }
+                  return {
+                    signature: tx.transaction.signatures[0],
+                    receiver: receivers[0].account.toString(),
+                    solAmount: receivers[0].postBalance,
+                  };
                 } else {
                   log(`⚠️ Недостатньо байтів у dataBuffer для зчитування лампортів. Транзакція: ${tx.transaction.signatures[0]}`);
                 }
