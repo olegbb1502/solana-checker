@@ -112,16 +112,21 @@ const main = async (log, stopCallback) => {
                     };
                   });
                   const receivers = balanceChanges.filter(change => change.change > 0);
-                  if (receivers[0].preBalance === 0 && receivers[0].postBalance >= SOL_AMOUNT) {
-                    const message = `💰 Новий гаманець виявлено: \`${receivers[0].account.toString()}\` отримав ${receivers[0].postBalance} SOL`;
-                    log(message);
-                    await sendTelegramMessage(message);
+                  if (receivers[0]) {
+                    if (
+                      receivers[0].preBalance === 0 
+                      && receivers[0].postBalance >= SOL_AMOUNT
+                    ) {
+                      const message = `💰 Новий гаманець виявлено: \`${receivers[0].account.toString()}\` отримав ${receivers[0].postBalance} SOL`;
+                      log(message);
+                      await sendTelegramMessage(message, log);
+                    }
+                    return {
+                      signature: tx.transaction.signatures[0],
+                      receiver: receivers[0].account.toString(),
+                      solAmount: receivers[0].postBalance,
+                    };
                   }
-                  return {
-                    signature: tx.transaction.signatures[0],
-                    receiver: receivers[0].account.toString(),
-                    solAmount: receivers[0].postBalance,
-                  };
                 } else {
                   log(`⚠️ Недостатньо байтів у dataBuffer для зчитування лампортів. Транзакція: ${tx.transaction.signatures[0]}`);
                 }
