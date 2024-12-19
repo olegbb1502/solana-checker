@@ -11,12 +11,12 @@ const main = async () => {
     const connectionHttp = new Connection(httpUrl, 'finalized');
 
       try {
-        const block = await connectionHttp.getBlock(306973314, {
-            commitment: 'finalized',
-            transactionDetails: 'full', 
-            rewards: true, 
-            maxSupportedTransactionVersion: 0, 
-        });
+        // const block = await connectionHttp.getBlock(306973314, {
+        //     commitment: 'finalized',
+        //     transactionDetails: 'full', 
+        //     rewards: true, 
+        //     maxSupportedTransactionVersion: 0, 
+        // });
         
         const tx = await connectionHttp.getTransaction('58S9WjwdWaciZmomuijg9brqPK1MEa8iEib55V3gzqUjFHYuwYDkfZg9EnvcrTQBuPwma74dXdWmxzQuFGZw7ZZv');
         
@@ -27,13 +27,19 @@ const main = async () => {
             console.log('break');
             continue;
           }
-
           const programId = accountKeys[instruction.programIdIndex].toString();
+          const systemProgramIds = ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111'];
+
+          if (!systemProgramIds.includes(programId)) {
+            console.log('AZAZAZA');
+            break;
+          }
+          
           const dataBuffer = Buffer.from(instruction.data, 'base64');
           
-          const systemProgramId = '11111111111111111111111111111111';
+          // const systemProgramIds = ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111'];
           
-          if (programId === systemProgramId && dataBuffer[0] === 220) {
+          if (dataBuffer[0] === 220) {
             const preBalances = tx.meta.preBalances;
             const postBalances = tx.meta.postBalances;
             
@@ -52,7 +58,7 @@ const main = async () => {
             // Визначаємо відправників та одержувачів
             const senders = balanceChanges.filter(change => change.change < 0);
             const receivers = balanceChanges.filter(change => change.change > 0);
-            console.log(receivers[0].account.toString());
+            console.log(receivers);
             
           }
         }

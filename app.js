@@ -3,9 +3,8 @@ const axios = require('axios');
 const { ipcMain } = require('electron');
 require('dotenv').config();
 
-const { SOL_AMOUNT = 10, WS_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = process.env;
-
-const sendTelegramMessage = async (message, log) => {
+const sendTelegramMessage = async (message, log, envData) => {
+  const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = envData;
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
@@ -54,9 +53,13 @@ const getBlockWithRetry = async (connection, slot, log, maxRetries = 5, delay = 
   throw new Error(`Блок для слота ${slot} не знайдено після ${maxRetries} спроб.`);
 };
 
-const main = async (log, stopCallback) => {
+const main = async (log, stopCallback, envData) => {
+  const { SOL_AMOUNT = 10, WS_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, BLACKLIST } = process.env;
+  console.log(WS_TOKEN);
+  
   try {
     const httpUrl = `https://rpc-mainnet.solanatracker.io/?api_key=${WS_TOKEN}`;
+    
     const connectionHttp = new Connection(httpUrl, 'finalized');
 
     log('📡 Підключення до Solana через HTTP RPC...');
@@ -93,42 +96,40 @@ const main = async (log, stopCallback) => {
                 log(`⚠️ ProgramIdIndex ${instruction.programIdIndex} виходить за межі accountKeys у транзакції: ${tx.transaction.signatures[0]}`);
                 continue;
               }
-
               const programId = accountKeys[instruction.programIdIndex].toString();
+              const systemProgramIds = ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111'];
+    
+              if (!systemProgramIds.includes(programId)) {
+                break;
+              }
               const dataBuffer = Buffer.from(instruction.data, 'base64');
 
-              if (programId === systemProgramId && dataBuffer[0] === 220) {
-                if (dataBuffer.length >= 9) {
-                  const preBalances = tx.meta.preBalances;
-                  const postBalances = tx.meta.postBalances;
-                  const balanceChanges = preBalances.map((preBalance, index) => {
-                    const postBalance = postBalances[index];
-                    const change = postBalance - preBalance;
-                    return {
-                      account: tx.transaction.message.accountKeys[index] || `Account${index + 1}`,
-                      preBalance: preBalance / 1e9,
-                      postBalance: postBalance / 1e9,
-                      change: change / 1e9
-                    };
-                  });
-                  const receivers = balanceChanges.filter(change => change.change > 0);
-                  if (receivers[0]) {
-                    if (
-                      receivers[0].preBalance === 0 
-                      && receivers[0].postBalance >= SOL_AMOUNT
-                    ) {
-                      const message = `💰 Новий гаманець виявлено: \`${receivers[0].account.toString()}\` отримав ${receivers[0].postBalance} SOL`;
-                      log(message);
-                      await sendTelegramMessage(message, log);
-                    }
-                    return {
-                      signature: tx.transaction.signatures[0],
-                      receiver: receivers[0].account.toString(),
-                      solAmount: receivers[0].postBalance,
-                    };
+              if (dataBuffer[0] === 220) {
+                const preBalances = tx.meta.preBalances;
+                const postBalances = tx.meta.postBalances;
+                const balanceChanges = preBalances.map((preBalance, index) => {
+                  const postBalance = postBalances[index];
+                  const change = postBalance - preBalance;
+                  return {
+                    account: tx.transaction.message.accountKeys[index] || `Account${index + 1}`,
+                    preBalance: preBalance / 1e9,
+                    postBalance: postBalance / 1e9,
+                    change: change / 1e9
+                  };
+                });
+                const receivers = balanceChanges.filter(change => change.change > 0);
+                const senders = balanceChanges.filter(change => change.change < 0);
+                if (receivers[0] && !BLACKLIST.includes(senders[0].account.toString())) {
+                  if (receivers[0].change >= SOL_AMOUNT) {
+                    const message = `💰 Новий гаманець виявлено: \nТранзакція \`${tx.transaction.signatures[0]}\`\nКористувач \`${receivers[0].account.toString()}\` отримав ${receivers[0].change} SOL`;
+                    log(message);
+                    await sendTelegramMessage(message, log, process.env);
                   }
-                } else {
-                  log(`⚠️ Недостатньо байтів у dataBuffer для зчитування лампортів. Транзакція: ${tx.transaction.signatures[0]}`);
+                  return {
+                    signature: tx.transaction.signatures[0],
+                    receiver: receivers[0].account.toString(),
+                    solAmount: receivers[0].postBalance,
+                  };
                 }
               }
             }

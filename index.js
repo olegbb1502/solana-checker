@@ -25,7 +25,7 @@ app.whenReady().then(() => {
   ipcMain.on('start-main-process', (event, envData) => {
     process.env = { ...process.env, ...envData };
     stopProcess = false;
-    main((message, type = 'log') => {
+    main((message, type = 'log', envData) => {
       const channel = type === 'error' ? 'error-message' : 'log-message';
       mainWindow.webContents.send(channel, message);
     }, () => stopProcess);
