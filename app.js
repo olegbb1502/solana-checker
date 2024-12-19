@@ -120,7 +120,7 @@ const main = async (log, stopCallback, envData) => {
                 const receivers = balanceChanges.filter(change => change.change > 0);
                 const senders = balanceChanges.filter(change => change.change < 0);
                 if (receivers[0] && !BLACKLIST.includes(senders[0].account.toString())) {
-                  if (receivers[0].change >= SOL_AMOUNT) {
+                  if (receivers[0].change >= SOL_AMOUNT && receivers[0].preBalance === 0) {
                     const message = `💰 Новий гаманець виявлено: \nТранзакція \`${tx.transaction.signatures[0]}\`\nКористувач \`${receivers[0].account.toString()}\` отримав ${receivers[0].change} SOL`;
                     log(message);
                     await sendTelegramMessage(message, log, process.env);
