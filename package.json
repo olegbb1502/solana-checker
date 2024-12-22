@@ -16,6 +16,7 @@
     "@solana/web3.js": "^1.95.5",
     "axios": "^1.7.9",
     "dotenv": "^16.4.6",
+    "electron": "^33.2.1",
     "web3": "^4.16.0"
   },
   "build": {
@@ -40,11 +41,11 @@
     },
     "mac": {
       "icon": "icon.icns",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "sign": false
     }
-  },
-  "devDependencies": {
-    "electron": "^33.2.1"
   }
 }

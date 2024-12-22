@@ -1,7 +1,11 @@
 const { Connection } = require('@solana/web3.js');
 const axios = require('axios');
 const { ipcMain } = require('electron');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
+
+const configFilePath = path.join(__dirname, 'config.txt');
 
 const sendTelegramMessage = async (message, log, envData) => {
   const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = envData;
@@ -15,12 +19,26 @@ const sendTelegramMessage = async (message, log, envData) => {
     });
 
     console.log('Повідомлення надіслано в Telegram:', response.data);
-    log('Повідомлення надіслано в Telegram: ' + message);
+    // log('Повідомлення надіслано в Telegram: ' + message);
   } catch (error) {
     console.error('Помилка при відправці повідомлення в Telegram:', error.message);
     log('Помилка при відправці повідомлення: ' + error.message);
   }
 };
+
+const writeToFile = async(filename, message, log) => {
+  const filePath = path.join(__dirname, filename);
+  const formattedMessage = `${message}\n`;
+  fs.appendFile(filePath, formattedMessage, (err) => {
+    if (err) {
+      log('Помилка запису у файл:'+err);
+      console.error('Помилка запису у файл:', err);
+    } else {
+      log('Гаманець записано у файл');
+      console.log('Повідомлення записано у файл:', message);
+    }
+  });
+}
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -38,7 +56,7 @@ const getBlockWithRetry = async (connection, slot, log, maxRetries = 5, delay = 
 
       if (block) {
         console.log(`Блок для слота ${slot} успішно отримано.`);
-        log(`Блок для слота ${slot} успішно отримано.`);
+        // log(`Блок для слота ${slot} успішно отримано.`);
         return block;
       }
     } catch (error) {
@@ -46,19 +64,30 @@ const getBlockWithRetry = async (connection, slot, log, maxRetries = 5, delay = 
       log(`Помилка отримання блоку для слота ${slot} (спроба ${attempt}/${maxRetries}): ${error.message}`);
     }
     
-    console.log(`Очікування ${delay} мс перед повтором...`);
-    await wait(delay);
+    // console.log(`Очікування ${delay} мс перед повтором...`);
+    // await wait(delay);
   }
 
   throw new Error(`Блок для слота ${slot} не знайдено після ${maxRetries} спроб.`);
 };
 
 const main = async (log, stopCallback, envData) => {
-  const { SOL_AMOUNT = 10, WS_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, BLACKLIST } = process.env;
-  console.log(WS_TOKEN);
+  const { SOL_AMOUNT = 10, WS_TOKEN, FILENAME, BLACKLIST, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, USE_FILE } = process.env;
+  let rpcToken = WS_TOKEN;
+  
+  if (!rpcToken.length) {
+    const configFileData = fs.readFileSync(configFilePath, 'utf8');
+    rpcToken = configFileData.split('\n')[0];
+  }
+
+  if (!USE_FILE && !TELEGRAM_BOT_TOKEN.length && !TELEGRAM_CHAT_ID.length) {
+    const configFileData = fs.readFileSync(configFilePath, 'utf8');
+    process.env.TELEGRAM_BOT_TOKEN = configFileData.split('\n')[1];
+    process.env.TELEGRAM_CHAT_ID = configFileData.split('\n')[2];
+  }
   
   try {
-    const httpUrl = `https://rpc-mainnet.solanatracker.io/?api_key=${WS_TOKEN}`;
+    const httpUrl = `https://rpc-mainnet.solanatracker.io/?api_key=${rpcToken}`;
     
     const connectionHttp = new Connection(httpUrl, 'finalized');
 
@@ -123,7 +152,11 @@ const main = async (log, stopCallback, envData) => {
                   if (receivers[0].change >= SOL_AMOUNT && receivers[0].preBalance === 0) {
                     const message = `💰 Новий гаманець виявлено: \nТранзакція \`${tx.transaction.signatures[0]}\`\nКористувач \`${receivers[0].account.toString()}\` отримав ${receivers[0].change} SOL`;
                     log(message);
-                    await sendTelegramMessage(message, log, process.env);
+                    if (USE_FILE) {
+                      await writeToFile(FILENAME, message, log);
+                    } else {
+                      await sendTelegramMessage(message, log, process.env);
+                    }
                   }
                   return {
                     signature: tx.transaction.signatures[0],
