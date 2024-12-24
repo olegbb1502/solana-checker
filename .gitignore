@@ -4,4 +4,3 @@ package-lock.json
 dist/
 .DS_Store
 config.txt
-result.txt

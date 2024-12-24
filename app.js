@@ -1,4 +1,4 @@
-const { Connection } = require('@solana/web3.js');
+const { Connection, PublicKey } = require('@solana/web3.js');
 const axios = require('axios');
 const { ipcMain } = require('electron');
 const fs = require('fs');
@@ -12,69 +12,81 @@ const sendTelegramMessage = async (message, log, envData) => {
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-    const response = await axios.post(url, {
+    await axios.post(url, {
       chat_id: TELEGRAM_CHAT_ID,
       text: message,
-      parse_mode: 'Markdown'
+      parse_mode: 'Markdown',
     });
-
-    console.log('Повідомлення надіслано в Telegram:', response.data);
-    // log('Повідомлення надіслано в Telegram: ' + message);
   } catch (error) {
     console.error('Помилка при відправці повідомлення в Telegram:', error.message);
-    log('Помилка при відправці повідомлення: ' + error.message);
   }
 };
 
-const writeToFile = async(filename, message, log) => {
+const writeToFile = async (filename, message, log) => {
   const filePath = path.join(__dirname, filename);
   const formattedMessage = `${message}\n`;
   fs.appendFile(filePath, formattedMessage, (err) => {
     if (err) {
-      log('Помилка запису у файл:'+err);
       console.error('Помилка запису у файл:', err);
-    } else {
-      log('Гаманець записано у файл');
-      console.log('Повідомлення записано у файл:', message);
     }
   });
-}
+};
 
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const getBlockWithRetry = async (connection, slot) => {
+  try {
+    const block = await connection.getBlock(slot, {
+      commitment: 'finalized',
+      transactionDetails: 'full',
+      rewards: true,
+      maxSupportedTransactionVersion: 0,
+    });
 
-const getBlockWithRetry = async (connection, slot, log, maxRetries = 5, delay = 3000) => {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Спроба ${attempt} отримати блок для слота: ${slot}`);
-      log(`Спроба ${attempt} отримати блок для слота: ${slot}`);
-      const block = await connection.getBlock(slot, {
-        commitment: 'finalized',
-        transactionDetails: 'full', 
-        rewards: true, 
-        maxSupportedTransactionVersion: 0, 
-      });
-
-      if (block) {
-        console.log(`Блок для слота ${slot} успішно отримано.`);
-        // log(`Блок для слота ${slot} успішно отримано.`);
-        return block;
-      }
-    } catch (error) {
-      console.error(`Помилка отримання блоку для слота ${slot} (спроба ${attempt}/${maxRetries}):`, error.message);
-      log(`Помилка отримання блоку для слота ${slot} (спроба ${attempt}/${maxRetries}): ${error.message}`);
+    if (block) {
+      console.log(`Блок для слота ${slot} успішно отримано.`);
+      return block;
     }
-    
-    // console.log(`Очікування ${delay} мс перед повтором...`);
-    // await wait(delay);
+  } catch (error) {
+    console.error(`Помилка отримання блоку для слота ${slot}:`, error.message);
   }
+  throw new Error(`Блок для слота ${slot} не знайдено.`);
+};
 
-  throw new Error(`Блок для слота ${slot} не знайдено після ${maxRetries} спроб.`);
+const processTransactions = (transactions, systemProgramIds) => {
+  return transactions.filter((tx) => {
+    if (!tx.transaction || !tx.transaction.message || !tx.transaction.message.instructions) {
+      return false;
+    }
+
+    const accountKeys = tx.transaction.message.accountKeys;
+    const instructions = tx.transaction.message.instructions;
+
+    return instructions.some(
+      (instruction) =>
+        accountKeys[instruction.programIdIndex] &&
+        systemProgramIds.includes(accountKeys[instruction.programIdIndex].toString())
+    );
+  });
+};
+
+const timeoutPromise = (promise, ms) => {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout')), ms)
+  );
+  return Promise.race([promise, timeout]);
 };
 
 const main = async (log, stopCallback, envData) => {
-  const { SOL_AMOUNT = 10, WS_TOKEN, FILENAME, BLACKLIST, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, USE_FILE } = process.env;
+  const {
+    SOL_AMOUNT = 10,
+    WS_TOKEN,
+    FILENAME,
+    BLACKLIST = [],
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID,
+    USE_FILE,
+  } = process.env;
   let rpcToken = WS_TOKEN;
-  
+
   if (!rpcToken.length) {
     const configFileData = fs.readFileSync(configFilePath, 'utf8');
     rpcToken = configFileData.split('\n')[0];
@@ -85,10 +97,9 @@ const main = async (log, stopCallback, envData) => {
     process.env.TELEGRAM_BOT_TOKEN = configFileData.split('\n')[1];
     process.env.TELEGRAM_CHAT_ID = configFileData.split('\n')[2];
   }
-  
+
   try {
     const httpUrl = `https://rpc-mainnet.solanatracker.io/?api_key=${rpcToken}`;
-    
     const connectionHttp = new Connection(httpUrl, 'finalized');
 
     log('📡 Підключення до Solana через HTTP RPC...');
@@ -96,96 +107,96 @@ const main = async (log, stopCallback, envData) => {
     let lastSlot = await connectionHttp.getSlot('finalized');
     log(`📦 Початковий слот: ${lastSlot}`);
 
+    const systemProgramIds = ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111'];
+
     while (true) {
       if (stopCallback()) {
         log('🛑 Основний процес зупинено.');
         break;
       }
 
-      log(`📦 Обробляється слот: ${lastSlot}`);
+      // log(`📦 Обробляється слот: ${lastSlot}`);
 
       try {
-        const block = await getBlockWithRetry(connectionHttp, lastSlot, log);
+        const block = await getBlockWithRetry(connectionHttp, lastSlot);
 
-        log(`🔍 Кількість транзакцій у блоці: ${block.transactions.length}`);
+        const filteredTransactions = processTransactions(block.transactions, systemProgramIds);
+        
+        // await Promise.all(
+        const successWallets = filteredTransactions.map((tx) => {
+          const accountKeys = tx.transaction.message.accountKeys;
+          const instructions = tx.transaction.message.instructions;
 
-        const systemProgramId = '11111111111111111111111111111111';
-
-        const highValueTransactions = await Promise.all(
-          block.transactions.map(async (tx) => {
-            if (!tx.transaction || !tx.transaction.message || !tx.transaction.message.instructions) {
-              return null;
+          for (const instruction of instructions) {
+            const programId = accountKeys[instruction.programIdIndex].toString();
+            if (!systemProgramIds.includes(programId)) {
+              break;
+            }
+            if (!accountKeys[instruction.programIdIndex]) {
+              continue;
             }
 
-            const accountKeys = tx.transaction.message.accountKeys;
-            const instructions = tx.transaction.message.instructions;
+            const dataBuffer = Buffer.from(instruction.data, 'base64');
+            if (dataBuffer[0] === 220) {
+              const preBalances = tx.meta.preBalances;
+              const postBalances = tx.meta.postBalances;
+              const balanceChanges = preBalances.map((preBalance, index) => {
+                const postBalance = postBalances[index];
+                const change = postBalance - preBalance;
+                return {
+                  account: tx.transaction.message.accountKeys[index] || `Account${index + 1}`,
+                  preBalance: preBalance / 1e9,
+                  postBalance: postBalance / 1e9,
+                  change: change / 1e9,
+                };
+              });
 
-            for (const instruction of instructions) {
-              if (!accountKeys[instruction.programIdIndex]) {
-                log(`⚠️ ProgramIdIndex ${instruction.programIdIndex} виходить за межі accountKeys у транзакції: ${tx.transaction.signatures[0]}`);
-                continue;
-              }
-              const programId = accountKeys[instruction.programIdIndex].toString();
-              const systemProgramIds = ['11111111111111111111111111111111', 'ComputeBudget111111111111111111111111111111'];
-    
-              if (!systemProgramIds.includes(programId)) {
-                break;
-              }
-              const dataBuffer = Buffer.from(instruction.data, 'base64');
+              const receivers = balanceChanges.filter((change) => change.change > 0);
+              const senders = balanceChanges.filter((change) => change.change < 0);
 
-              if (dataBuffer[0] === 220) {
-                const preBalances = tx.meta.preBalances;
-                const postBalances = tx.meta.postBalances;
-                const balanceChanges = preBalances.map((preBalance, index) => {
-                  const postBalance = postBalances[index];
-                  const change = postBalance - preBalance;
-                  return {
-                    account: tx.transaction.message.accountKeys[index] || `Account${index + 1}`,
-                    preBalance: preBalance / 1e9,
-                    postBalance: postBalance / 1e9,
-                    change: change / 1e9
-                  };
-                });
-                const receivers = balanceChanges.filter(change => change.change > 0);
-                const senders = balanceChanges.filter(change => change.change < 0);
-                if (receivers[0] && !BLACKLIST.includes(senders[0].account.toString())) {
-                  if (receivers[0].change >= SOL_AMOUNT && receivers[0].preBalance === 0) {
-                    const message = `💰 Новий гаманець виявлено: \nТранзакція \`${tx.transaction.signatures[0]}\`\nКористувач \`${receivers[0].account.toString()}\` отримав ${receivers[0].change} SOL`;
-                    log(message);
-                    if (USE_FILE) {
-                      await writeToFile(FILENAME, message, log);
-                    } else {
-                      await sendTelegramMessage(message, log, process.env);
-                    }
-                  }
-                  return {
-                    signature: tx.transaction.signatures[0],
-                    receiver: receivers[0].account.toString(),
-                    solAmount: receivers[0].postBalance,
-                  };
+              if (receivers[0] && !BLACKLIST.includes(senders[0]?.account.toString())) {
+                if (receivers[0].change >= SOL_AMOUNT && receivers[0].preBalance === 0) {
+                  receivers[0].transaction = tx.transaction.signatures[0];
+                  return receivers[0];
                 }
               }
             }
-            return null;
-          })
-        );
+          }
+          return null;
+        }).filter(w => w !== null);
 
-        const validTransactions = highValueTransactions.filter(tx => tx !== null);
-
-        log(`📋 Кількість транзакцій із трансфером ${SOL_AMOUNT}+ SOL: ${validTransactions.length}`);
-
-        validTransactions.forEach((tx, index) => {
-          log(`🔗 Транзакція з трансфером ${SOL_AMOUNT}+ SOL ${index + 1}: Підпис: ${tx.signature}, Отримувач: ${tx.receiver}, Сума: ${tx.solAmount} SOL`);
+        const blockResult = successWallets.map((wallet) => {
+          const receiverWallet = wallet.account.toString();
+          const walletMessage = USE_FILE
+            ? receiverWallet
+            : `[wallet](https://solscan.io/account/${receiverWallet}#transfers)`;
+          return `${USE_FILE && `[${new Date().toISOString()}]`} Транзакція \`${wallet.transaction}\`\nКористувач ${walletMessage} отримав ${wallet.change} SOL`;
         });
 
+        if (blockResult.length) {
+          const message = blockResult.join('\n');
+          log(`✅ Знайдено ${blockResult.length} транзакцій.`);
+          if (USE_FILE) {
+            writeToFile(FILENAME, message, log);
+          } else {
+            sendTelegramMessage(message, log, envData);
+          }
+        }
+        // );
+
+        delete block;
       } catch (error) {
-        log(`❌ Помилка при обробці слота ${lastSlot}: ${error.message}`);
+        if (error.message === 'Timeout') {
+          log(`⚠️ Слот ${lastSlot} пропущено через тайм-аут.`);
+        } else {
+          console.error(error);
+        }
       }
 
       lastSlot += 1;
-      log(`📦 Слот збільшено до: ${lastSlot}`);
     }
   } catch (error) {
+    console.error(`❌ Помилка: ${error.message}`);
     log(`❌ Помилка: ${error.message}`);
   }
 };
