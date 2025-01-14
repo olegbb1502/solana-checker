@@ -7,8 +7,8 @@ require('dotenv').config();
 
 const configFilePath = path.join(__dirname, 'config.txt');
 
-const sendTelegramMessage = async (message, log, envData) => {
-  const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = envData;
+const sendTelegramMessage = async (message, log) => {
+  const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = process.env;
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
@@ -155,7 +155,7 @@ const main = async (log, stopCallback, envData) => {
               const senders = balanceChanges.filter((change) => change.change < 0);
 
               if (receivers[0] && !BLACKLIST.includes(senders[0]?.account.toString())) {
-                if (receivers[0].change >= SOL_AMOUNT && receivers[0].preBalance === 0) {
+                if (receivers[0].change >= 1 && receivers[0].change <= SOL_AMOUNT && receivers[0].preBalance === 0) {
                   receivers[0].transaction = tx.transaction.signatures[0];
                   return receivers[0];
                 }
